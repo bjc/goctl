@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	var path = flag.String("path", "", "Socket path for sending commands (required).")
+	var path = flag.String("f", "", "socket path for sending commands (required)")
 	flag.Parse()
 
 	if *path == "" {
