@@ -36,7 +36,7 @@ type Goctl struct {
 
 type Handler interface {
 	Name() string
-	Run([]string) string
+	Run(*Goctl, []string) string
 }
 
 func init() {
@@ -158,7 +158,7 @@ func (gc *Goctl) reader(c io.ReadWriteCloser) error {
 		gc.logger.Debug("Got command.", "cmd", cmd)
 		var resp string
 		if h := gc.handlers[cmd[0]]; h != nil {
-			resp = h.Run(cmd[1:])
+			resp = h.Run(gc, cmd[1:])
 		} else {
 			resp = fmt.Sprintf("ERROR: unknown command: '%s'.", cmd[0])
 		}

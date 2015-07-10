@@ -6,7 +6,7 @@ func (cmd *cmdPing) Name() string {
 	return "ping"
 }
 
-func (cmd *cmdPing) Run(_ []string) string {
+func (cmd *cmdPing) Run(_ *Goctl, _ []string) string {
 	return "pong"
 }
 

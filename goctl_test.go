@@ -11,10 +11,10 @@ import (
 
 type testHandler struct {
 	name string
-	fn   func([]string) string
+	fn   func(*Goctl, []string) string
 }
 
-func makeHandler(name string, fn func(_ []string) string) testHandler {
+func makeHandler(name string, fn func(_ *Goctl, _ []string) string) testHandler {
 	return testHandler{name: name, fn: fn}
 }
 
@@ -22,8 +22,8 @@ func (th testHandler) Name() string {
 	return th.name
 }
 
-func (th testHandler) Run(args []string) string {
-	return th.fn(args)
+func (th testHandler) Run(gc *Goctl, args []string) string {
+	return th.fn(gc, args)
 }
 
 var sockpath string
@@ -39,12 +39,12 @@ func init() {
 	}
 }
 
-func start(t testing.TB) Goctl {
+func start(t testing.TB) *Goctl {
 	gc := NewGoctl(sockpath)
 	if err := gc.Start(); err != nil {
 		t.Fatalf("Couldn't start: %s.", err)
 	}
-	return gc
+	return &gc
 }
 
 func dial(t testing.TB) net.Conn {
@@ -115,7 +115,10 @@ func TestAddHandler(t *testing.T) {
 	gc := start(t)
 	defer gc.Stop()
 
-	gc.AddHandler(makeHandler("foo", func(args []string) string {
+	gc.AddHandler(makeHandler("foo", func(innerGC *Goctl, args []string) string {
+		if innerGC != gc {
+			t.Errorf("Goctl object not passed into handler properly (got: %p, want: %p).", innerGC, gc)
+		}
 		if !reflect.DeepEqual(args, []string{"bar", "baz"}) {
 			t.Errorf("Got %v, expected ['bar', 'baz']", args)
 		}
@@ -139,13 +142,13 @@ func TestAddHandlers(t *testing.T) {
 	defer gc.Stop()
 
 	gc.AddHandlers([]Handler{
-		makeHandler("foo", func(args []string) string {
+		makeHandler("foo", func(_ *Goctl, args []string) string {
 			if !reflect.DeepEqual(args, []string{"bar", "baz"}) {
 				t.Errorf("Got %v, expected ['bar', 'baz']", args)
 			}
 			return ""
 		}),
-		makeHandler("bar", func(args []string) string {
+		makeHandler("bar", func(_ *Goctl, args []string) string {
 			if !reflect.DeepEqual(args, []string{"baz", "pham"}) {
 				t.Errorf("Got %v, expected ['baz', 'pham']", args)
 			}
@@ -176,15 +179,15 @@ func TestCannotOverrideExtantHandlers(t *testing.T) {
 	gc := start(t)
 	defer gc.Stop()
 
-	err := gc.AddHandler(makeHandler("ping", func(args []string) string {
+	err := gc.AddHandler(makeHandler("ping", func(_ *Goctl, args []string) string {
 		return "gnip"
 	}))
 	if err != HandlerExists {
 		t.Error("Was able to override built-in ping handler.")
 	}
 	err = gc.AddHandlers([]Handler{
-		makeHandler("foo", func(args []string) string { return "foo" }),
-		makeHandler("foo", func(args []string) string { return "foo" }),
+		makeHandler("foo", func(_ *Goctl, args []string) string { return "foo" }),
+		makeHandler("foo", func(_ *Goctl, args []string) string { return "foo" }),
 	})
 	if err != HandlerExists {
 		t.Error("Was able to assign two handlers for 'foo'.")

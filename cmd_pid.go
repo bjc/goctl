@@ -13,7 +13,7 @@ func (cmd cmdPID) Name() string {
 	return "pid"
 }
 
-func (cmd cmdPID) Run(_ []string) string {
+func (cmd cmdPID) Run(_ *Goctl, _ []string) string {
 	return pid
 }
 
