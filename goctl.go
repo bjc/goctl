@@ -2,6 +2,7 @@ package goctl
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -17,11 +18,16 @@ import (
 // How long to wait for a response before returning an error.
 const timeout = 100 * time.Millisecond
 
-// Built-in commands which can't be overridden.
+// Built-in commands.
 const (
 	cmdPing = "ping"
 	cmdPID  = "pid"
 )
+
+var builtinHandlers []*Handler
+
+// Error returned if handler already exists.
+var HandlerExists error
 
 var (
 	pid    int
@@ -45,13 +51,24 @@ func init() {
 	pid = os.Getpid()
 	Logger = log15.New()
 	Logger.SetHandler(log15.DiscardHandler())
+
+	HandlerExists = errors.New("handler exists")
+
+	builtinHandlers = []*Handler{
+		{cmdPing, handlePing},
+		{cmdPID, handlePID},
+	}
 }
 
 func NewGoctl(path string) Goctl {
+	handlers := make(map[string]*Handler)
+	for _, h := range builtinHandlers {
+		handlers[h.Name] = h
+	}
 	return Goctl{
 		logger:   Logger.New("id", atomic.AddUint64(&lastid, 1)),
 		path:     path,
-		handlers: make(map[string]*Handler),
+		handlers: handlers,
 	}
 }
 
@@ -85,14 +102,18 @@ func (gc *Goctl) Stop() {
 	}
 }
 
-func (gc *Goctl) AddHandler(name string, fn func([]string) string) {
-	gc.AddHandlers([]*Handler{{name, fn}})
+func (gc *Goctl) AddHandler(name string, fn func([]string) string) error {
+	return gc.AddHandlers([]*Handler{{name, fn}})
 }
 
-func (gc *Goctl) AddHandlers(handlers []*Handler) {
+func (gc *Goctl) AddHandlers(handlers []*Handler) error {
 	for _, h := range handlers {
+		if gc.handlers[h.Name] != nil {
+			return HandlerExists
+		}
 		gc.handlers[h.Name] = h
 	}
+	return nil
 }
 
 func Read(r io.Reader) ([]byte, error) {
@@ -124,6 +145,14 @@ func Write(w io.Writer, p []byte) error {
 	return nil
 }
 
+func handlePing(args []string) string {
+	return "pong"
+}
+
+func handlePID(args []string) string {
+	return strconv.Itoa(pid)
+}
+
 func (gc *Goctl) acceptor() {
 	for {
 		c, err := gc.listener.Accept()
@@ -150,18 +179,10 @@ func (gc *Goctl) reader(c io.ReadWriteCloser) error {
 		cmd := strings.Split(string(buf), "\u0000")
 		gc.logger.Debug("Got command.", "cmd", cmd)
 		var resp string
-		switch cmd[0] {
-		case cmdPing:
-			resp = "pong"
-		case cmdPID:
-			resp = strconv.Itoa(pid)
-		default:
-			h := gc.handlers[cmd[0]]
-			if h == nil {
-				resp = fmt.Sprintf("ERROR: unknown command: '%s'.", cmd[0])
-			} else {
-				resp = h.Fn(cmd[1:])
-			}
+		if h := gc.handlers[cmd[0]]; h != nil {
+			resp = h.Fn(cmd[1:])
+		} else {
+			resp = fmt.Sprintf("ERROR: unknown command: '%s'.", cmd[0])
 		}
 		gc.logger.Debug("Responding.", "resp", resp)
 		Write(c, []byte(resp))

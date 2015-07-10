@@ -154,6 +154,25 @@ func TestAddHandlers(t *testing.T) {
 	}
 }
 
+func TestCannotOverrideExtantHandlers(t *testing.T) {
+	gc := start(t)
+	defer gc.Stop()
+
+	err := gc.AddHandler("ping", func(args []string) string {
+		return "gnip"
+	})
+	if err != HandlerExists {
+		t.Error("Was able to override built-in ping handler.")
+	}
+	err = gc.AddHandlers([]*Handler{
+		{"foo", func(args []string) string { return "foo" }},
+		{"foo", func(args []string) string { return "foo" }},
+	})
+	if err != HandlerExists {
+		t.Error("Was able to assign two handlers for 'foo'.")
+	}
+}
+
 func BenchmarkStartStop(b *testing.B) {
 	gc := NewGoctl(sockpath)
 	for i := 0; i < b.N; i++ {
