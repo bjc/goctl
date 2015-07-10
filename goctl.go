@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -18,19 +17,12 @@ import (
 // How long to wait for a response before returning an error.
 const timeout = 100 * time.Millisecond
 
-// Built-in commands.
-const (
-	cmdPing = "ping"
-	cmdPID  = "pid"
-)
-
-var builtinHandlers []*Handler
+var builtinHandlers []Handler
 
 // Error returned if handler already exists.
 var HandlerExists error
 
 var (
-	pid    int
 	lastid uint64
 	Logger log15.Logger
 )
@@ -39,31 +31,25 @@ type Goctl struct {
 	logger   log15.Logger
 	path     string
 	listener net.Listener
-	handlers map[string]*Handler
+	handlers map[string]Handler
 }
 
-type Handler struct {
-	Name string
-	Fn   func([]string) string
+type Handler interface {
+	Name() string
+	Run([]string) string
 }
 
 func init() {
-	pid = os.Getpid()
 	Logger = log15.New()
 	Logger.SetHandler(log15.DiscardHandler())
 
 	HandlerExists = errors.New("handler exists")
-
-	builtinHandlers = []*Handler{
-		{cmdPing, handlePing},
-		{cmdPID, handlePID},
-	}
 }
 
 func NewGoctl(path string) Goctl {
-	handlers := make(map[string]*Handler)
+	handlers := make(map[string]Handler)
 	for _, h := range builtinHandlers {
-		handlers[h.Name] = h
+		handlers[h.Name()] = h
 	}
 	return Goctl{
 		logger:   Logger.New("id", atomic.AddUint64(&lastid, 1)),
@@ -102,16 +88,16 @@ func (gc *Goctl) Stop() {
 	}
 }
 
-func (gc *Goctl) AddHandler(name string, fn func([]string) string) error {
-	return gc.AddHandlers([]*Handler{{name, fn}})
+func (gc *Goctl) AddHandler(h Handler) error {
+	return gc.AddHandlers([]Handler{h})
 }
 
-func (gc *Goctl) AddHandlers(handlers []*Handler) error {
+func (gc *Goctl) AddHandlers(handlers []Handler) error {
 	for _, h := range handlers {
-		if gc.handlers[h.Name] != nil {
+		if gc.handlers[h.Name()] != nil {
 			return HandlerExists
 		}
-		gc.handlers[h.Name] = h
+		gc.handlers[h.Name()] = h
 	}
 	return nil
 }
@@ -145,14 +131,6 @@ func Write(w io.Writer, p []byte) error {
 	return nil
 }
 
-func handlePing(args []string) string {
-	return "pong"
-}
-
-func handlePID(args []string) string {
-	return strconv.Itoa(pid)
-}
-
 func (gc *Goctl) acceptor() {
 	for {
 		c, err := gc.listener.Accept()
@@ -180,7 +158,7 @@ func (gc *Goctl) reader(c io.ReadWriteCloser) error {
 		gc.logger.Debug("Got command.", "cmd", cmd)
 		var resp string
 		if h := gc.handlers[cmd[0]]; h != nil {
-			resp = h.Fn(cmd[1:])
+			resp = h.Run(cmd[1:])
 		} else {
 			resp = fmt.Sprintf("ERROR: unknown command: '%s'.", cmd[0])
 		}
@@ -198,7 +176,7 @@ func (gc *Goctl) isAlreadyRunning() string {
 	defer c.Close()
 
 	dataChan := make(chan []byte, 1)
-	c.Write([]byte(cmdPID))
+	c.Write([]byte("pid"))
 	go func() {
 		buf := make([]byte, 1024)
 		n, err := c.Read(buf[:])
