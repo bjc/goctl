@@ -95,37 +95,11 @@ func TestSimulCommands(t *testing.T) {
 	}
 }
 
-func TestAddHandler(t *testing.T) {
-	gc := start(t)
-	defer gc.Stop()
-
-	gc.AddHandler(makeHandler("foo", func(innerGC *Goctl, args []string) string {
-		if innerGC != gc {
-			t.Errorf("Goctl object not passed into handler properly (got: %p, want: %p).", innerGC, gc)
-		}
-		if !reflect.DeepEqual(args, []string{"bar", "baz"}) {
-			t.Errorf("Got %v, expected ['bar', 'baz']", args)
-		}
-		return "bar baz"
-	}))
-
-	c := dial(t)
-	defer c.Close()
-
-	Write(c, []byte("foo\u0000bar\u0000baz"))
-
-	if buf, err := Read(c); err != nil {
-		t.Errorf("Couldn't read from connection: %s.", err)
-	} else if string(buf) != "bar baz" {
-		t.Errorf("Got: %s, expected 'bar baz'")
-	}
-}
-
 func TestAddHandlers(t *testing.T) {
 	gc := start(t)
 	defer gc.Stop()
 
-	gc.AddHandlers([]Handler{
+	gc.AddHandlers(
 		makeHandler("foo", func(_ *Goctl, args []string) string {
 			if !reflect.DeepEqual(args, []string{"bar", "baz"}) {
 				t.Errorf("Got %v, expected ['bar', 'baz']", args)
@@ -138,7 +112,7 @@ func TestAddHandlers(t *testing.T) {
 			}
 			return "wauug"
 		}),
-	})
+	)
 
 	c := dial(t)
 	defer c.Close()
@@ -163,16 +137,16 @@ func TestCannotOverrideExtantHandlers(t *testing.T) {
 	gc := start(t)
 	defer gc.Stop()
 
-	err := gc.AddHandler(makeHandler("ping", func(_ *Goctl, args []string) string {
+	err := gc.AddHandlers(makeHandler("ping", func(_ *Goctl, args []string) string {
 		return "gnip"
 	}))
 	if err != HandlerExists {
 		t.Error("Was able to override built-in ping handler.")
 	}
-	err = gc.AddHandlers([]Handler{
+	err = gc.AddHandlers(
 		makeHandler("foo", func(_ *Goctl, args []string) string { return "foo" }),
 		makeHandler("foo", func(_ *Goctl, args []string) string { return "foo" }),
-	})
+	)
 	if err != HandlerExists {
 		t.Error("Was able to assign two handlers for 'foo'.")
 	}

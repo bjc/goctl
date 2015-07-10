@@ -89,11 +89,7 @@ func (gc *Goctl) Stop() {
 	}
 }
 
-func (gc *Goctl) AddHandler(h Handler) error {
-	return gc.AddHandlers([]Handler{h})
-}
-
-func (gc *Goctl) AddHandlers(handlers []Handler) error {
+func (gc *Goctl) AddHandlers(handlers ...Handler) error {
 	for _, h := range handlers {
 		if gc.handlers[h.Name()] != nil {
 			return HandlerExists
