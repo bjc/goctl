@@ -22,23 +22,33 @@ func init() {
 	}
 }
 
-func TestPing(t *testing.T) {
+func start(t testing.TB) Goctl {
 	gc := NewGoctl(sockpath)
 	if err := gc.Start(); err != nil {
 		t.Fatalf("Couldn't start: %s.", err)
 	}
-	defer gc.Stop()
+	return gc
+}
 
+func dial(t testing.TB) net.Conn {
 	c, err := net.Dial("unix", sockpath)
 	if err != nil {
 		t.Fatalf("Couldn't open %s: %s.", sockpath, err)
 	}
+	return c
+}
+
+func TestPing(t *testing.T) {
+	gc := start(t)
+	defer gc.Stop()
+
+	c := dial(t)
 	defer c.Close()
 
 	buf := []byte("ping")
 	Write(c, buf)
 
-	buf, err = Read(c)
+	buf, err := Read(c)
 	if err != nil {
 		t.Fatalf("Couldn't read from socket: %s.", err)
 	}
@@ -49,10 +59,7 @@ func TestPing(t *testing.T) {
 }
 
 func TestAlreadyRunning(t *testing.T) {
-	gc := NewGoctl(sockpath)
-	if err := gc.Start(); err != nil {
-		t.Errorf("Couldn't start: %s.", err)
-	}
+	gc := start(t)
 	defer gc.Stop()
 
 	bar := NewGoctl(sockpath)
@@ -63,22 +70,13 @@ func TestAlreadyRunning(t *testing.T) {
 }
 
 func TestSimulCommands(t *testing.T) {
-	gc := NewGoctl(sockpath)
-	if err := gc.Start(); err != nil {
-		t.Fatalf("Couldn't start: %s.", err)
-	}
+	gc := start(t)
 	defer gc.Stop()
 
-	c0, err := net.Dial("unix", sockpath)
-	if err != nil {
-		t.Fatalf("Coudln't open first connection to %s: %s.", sockpath, err)
-	}
+	c0 := dial(t)
 	defer c0.Close()
 
-	c1, err := net.Dial("unix", sockpath)
-	if err != nil {
-		t.Fatalf("Coudln't open second connection to %s: %s.", sockpath, err)
-	}
+	c1 := dial(t)
 	defer c1.Close()
 
 	Write(c0, []byte("ping"))
@@ -97,10 +95,7 @@ func TestSimulCommands(t *testing.T) {
 }
 
 func TestAddHandler(t *testing.T) {
-	gc := NewGoctl(sockpath)
-	if err := gc.Start(); err != nil {
-		t.Fatalf("Couldn't start: %s", err)
-	}
+	gc := start(t)
 	defer gc.Stop()
 
 	gc.AddHandler("foo", func(args []string) string {
@@ -110,11 +105,9 @@ func TestAddHandler(t *testing.T) {
 		return "bar baz"
 	})
 
-	c, err := net.Dial("unix", sockpath)
-	if err != nil {
-		t.Fatalf("Coudln't open connection to %s: %s.", sockpath, err)
-	}
+	c := dial(t)
 	defer c.Close()
+
 	Write(c, []byte("foo\u0000bar\u0000baz"))
 
 	if buf, err := Read(c); err != nil {
@@ -125,10 +118,7 @@ func TestAddHandler(t *testing.T) {
 }
 
 func TestAddHandlers(t *testing.T) {
-	gc := NewGoctl(sockpath)
-	if err := gc.Start(); err != nil {
-		t.Fatalf("Couldn't start: %s", err)
-	}
+	gc := start(t)
 	defer gc.Stop()
 
 	gc.AddHandlers([]*Handler{
@@ -145,11 +135,9 @@ func TestAddHandlers(t *testing.T) {
 			return "wauug"
 		}}})
 
-	c, err := net.Dial("unix", sockpath)
-	if err != nil {
-		t.Fatalf("Coudln't open connection to %s: %s.", sockpath, err)
-	}
+	c := dial(t)
 	defer c.Close()
+
 	Write(c, []byte("foo\u0000bar\u0000baz"))
 	Write(c, []byte("bar\u0000baz\u0000pham"))
 
@@ -175,14 +163,10 @@ func BenchmarkStartStop(b *testing.B) {
 }
 
 func BenchmarkPing(b *testing.B) {
-	gc := NewGoctl(sockpath)
-	gc.Start()
+	gc := start(b)
 	defer gc.Stop()
 
-	c, err := net.Dial("unix", sockpath)
-	if err != nil {
-		b.Fatalf("Coudln't open connection to %s: %s.", sockpath, err)
-	}
+	c := dial(b)
 	defer c.Close()
 
 	for i := 0; i < b.N; i++ {
