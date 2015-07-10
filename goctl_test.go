@@ -1,23 +1,37 @@
 package goctl
 
 import (
+	"io/ioutil"
+	"log"
 	"net"
+	"os"
 	"reflect"
 	"testing"
 )
 
-const SOCKPATH = "/tmp/xmppbot"
+var sockpath string
+
+func init() {
+	f, err := ioutil.TempFile("", "goctl-test")
+	if err != nil {
+		log.Fatalf("Couldn't create temporary file: %s.", err)
+	}
+	sockpath = f.Name()
+	if err := os.Remove(sockpath); err != nil {
+		log.Fatalf("Couldn't delete temporary file '%s': %s.", sockpath, err)
+	}
+}
 
 func TestPing(t *testing.T) {
-	gc := NewGoctl(SOCKPATH)
+	gc := NewGoctl(sockpath)
 	if err := gc.Start(); err != nil {
 		t.Fatalf("Couldn't start: %s.", err)
 	}
 	defer gc.Stop()
 
-	c, err := net.Dial("unix", SOCKPATH)
+	c, err := net.Dial("unix", sockpath)
 	if err != nil {
-		t.Fatalf("Couldn't open %s: %s.", SOCKPATH, err)
+		t.Fatalf("Couldn't open %s: %s.", sockpath, err)
 	}
 	defer c.Close()
 
@@ -35,13 +49,13 @@ func TestPing(t *testing.T) {
 }
 
 func TestAlreadyRunning(t *testing.T) {
-	gc := NewGoctl(SOCKPATH)
+	gc := NewGoctl(sockpath)
 	if err := gc.Start(); err != nil {
 		t.Errorf("Couldn't start: %s.", err)
 	}
 	defer gc.Stop()
 
-	bar := NewGoctl(SOCKPATH)
+	bar := NewGoctl(sockpath)
 	if bar.Start() == nil {
 		t.Errorf("Started bot when already running.")
 	}
@@ -49,21 +63,21 @@ func TestAlreadyRunning(t *testing.T) {
 }
 
 func TestSimulCommands(t *testing.T) {
-	gc := NewGoctl(SOCKPATH)
+	gc := NewGoctl(sockpath)
 	if err := gc.Start(); err != nil {
 		t.Fatalf("Couldn't start: %s.", err)
 	}
 	defer gc.Stop()
 
-	c0, err := net.Dial("unix", SOCKPATH)
+	c0, err := net.Dial("unix", sockpath)
 	if err != nil {
-		t.Fatalf("Coudln't open first connection to %s: %s.", SOCKPATH, err)
+		t.Fatalf("Coudln't open first connection to %s: %s.", sockpath, err)
 	}
 	defer c0.Close()
 
-	c1, err := net.Dial("unix", SOCKPATH)
+	c1, err := net.Dial("unix", sockpath)
 	if err != nil {
-		t.Fatalf("Coudln't open second connection to %s: %s.", SOCKPATH, err)
+		t.Fatalf("Coudln't open second connection to %s: %s.", sockpath, err)
 	}
 	defer c1.Close()
 
@@ -83,7 +97,7 @@ func TestSimulCommands(t *testing.T) {
 }
 
 func TestAddHandler(t *testing.T) {
-	gc := NewGoctl(SOCKPATH)
+	gc := NewGoctl(sockpath)
 	if err := gc.Start(); err != nil {
 		t.Fatalf("Couldn't start: %s", err)
 	}
@@ -96,12 +110,12 @@ func TestAddHandler(t *testing.T) {
 		return "bar baz"
 	})
 
-	c, err := net.Dial("unix", SOCKPATH)
+	c, err := net.Dial("unix", sockpath)
 	if err != nil {
-		t.Fatalf("Coudln't open connection to %s: %s.", SOCKPATH, err)
+		t.Fatalf("Coudln't open connection to %s: %s.", sockpath, err)
 	}
 	defer c.Close()
-	Write(c, []byte("foo bar baz"))
+	Write(c, []byte("foo\u0000bar\u0000baz"))
 
 	if buf, err := Read(c); err != nil {
 		t.Errorf("Couldn't read from connection: %s.", err)
@@ -111,7 +125,7 @@ func TestAddHandler(t *testing.T) {
 }
 
 func TestAddHandlers(t *testing.T) {
-	gc := NewGoctl(SOCKPATH)
+	gc := NewGoctl(sockpath)
 	if err := gc.Start(); err != nil {
 		t.Fatalf("Couldn't start: %s", err)
 	}
@@ -131,13 +145,13 @@ func TestAddHandlers(t *testing.T) {
 			return "wauug"
 		}}})
 
-	c, err := net.Dial("unix", SOCKPATH)
+	c, err := net.Dial("unix", sockpath)
 	if err != nil {
-		t.Fatalf("Coudln't open connection to %s: %s.", SOCKPATH, err)
+		t.Fatalf("Coudln't open connection to %s: %s.", sockpath, err)
 	}
 	defer c.Close()
-	Write(c, []byte("foo bar baz"))
-	Write(c, []byte("bar baz pham"))
+	Write(c, []byte("foo\u0000bar\u0000baz"))
+	Write(c, []byte("bar\u0000baz\u0000pham"))
 
 	if buf, err := Read(c); err != nil {
 		t.Errorf("Couldn't read from connection: %s.", err)
@@ -153,7 +167,7 @@ func TestAddHandlers(t *testing.T) {
 }
 
 func BenchmarkStartStop(b *testing.B) {
-	gc := NewGoctl(SOCKPATH)
+	gc := NewGoctl(sockpath)
 	for i := 0; i < b.N; i++ {
 		gc.Start()
 		gc.Stop()
@@ -161,13 +175,13 @@ func BenchmarkStartStop(b *testing.B) {
 }
 
 func BenchmarkPing(b *testing.B) {
-	gc := NewGoctl(SOCKPATH)
+	gc := NewGoctl(sockpath)
 	gc.Start()
 	defer gc.Stop()
 
-	c, err := net.Dial("unix", SOCKPATH)
+	c, err := net.Dial("unix", sockpath)
 	if err != nil {
-		b.Fatalf("Coudln't open connection to %s: %s.", SOCKPATH, err)
+		b.Fatalf("Coudln't open connection to %s: %s.", sockpath, err)
 	}
 	defer c.Close()
 

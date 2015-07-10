@@ -147,7 +147,7 @@ func (gc *Goctl) reader(c io.ReadWriteCloser) error {
 			return err
 		}
 
-		cmd := strings.Split(string(buf), " ")
+		cmd := strings.Split(string(buf), "\u0000")
 		gc.logger.Debug("Got command.", "cmd", cmd)
 		var resp string
 		switch cmd[0] {
@@ -158,7 +158,7 @@ func (gc *Goctl) reader(c io.ReadWriteCloser) error {
 		default:
 			h := gc.handlers[cmd[0]]
 			if h == nil {
-				resp = "ERROR: unknown command"
+				resp = fmt.Sprintf("ERROR: unknown command: '%s'.", cmd[0])
 			} else {
 				resp = h.Fn(cmd[1:])
 			}
@@ -186,16 +186,10 @@ func (gc *Goctl) isAlreadyRunning() string {
 		}
 	}()
 
-	timeoutChan := make(chan bool, 1)
-	go func() {
-		time.Sleep(timeout)
-		timeoutChan <- true
-	}()
-
 	select {
 	case buf := <-dataChan:
 		return string(buf)
-	case <-timeoutChan:
+	case <-time.After(timeout):
 		gc.logger.Info("Timed out checking PID of existing service.", "path", gc.path)
 		return ""
 	}

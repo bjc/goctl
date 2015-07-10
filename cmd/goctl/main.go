@@ -26,7 +26,7 @@ func main() {
 	}
 	defer c.Close()
 
-	goctl.Write(c, []byte(strings.Join(flag.Args(), " ")))
+	goctl.Write(c, []byte(strings.Join(flag.Args(), "\u0000")))
 	if buf, err := goctl.Read(c); err != nil {
 		log.Fatalf("Error reading response from command: %s.", err)
 	} else {
