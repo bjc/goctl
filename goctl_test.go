@@ -22,6 +22,10 @@ func (th testHandler) Name() string {
 	return th.name
 }
 
+func (th testHandler) Help() string {
+	return ""
+}
+
 func (th testHandler) Run(gc *Goctl, args []string) string {
 	return th.fn(gc, args)
 }

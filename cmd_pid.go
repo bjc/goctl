@@ -13,6 +13,10 @@ func (cmd cmdPID) Name() string {
 	return "pid"
 }
 
+func (cmd cmdPID) Help() string {
+	return "return the Unix process ID of this program"
+}
+
 func (cmd cmdPID) Run(_ *Goctl, _ []string) string {
 	return pid
 }

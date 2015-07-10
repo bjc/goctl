@@ -36,6 +36,7 @@ type Goctl struct {
 
 type Handler interface {
 	Name() string
+	Help() string
 	Run(*Goctl, []string) string
 }
 
